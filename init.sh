@@ -147,12 +147,14 @@ for choice in "${choices[@]}"; do
     esac
 done
 
-# ---------- 更新 .gitignore（可选） ----------
+# ---------- 更新 .gitignore（可选）----------
 echo ""
 if [ -f "$TARGET_DIR/.gitignore" ]; then
-    # 检查是否已包含 .aiproject 相关条目
-    if ! grep -q ".aiproject" "$TARGET_DIR/.gitignore" 2>/dev/null; then
-        read -p "  是否将 AI 工具配置加入 .gitignore？(y/N): " add_gitignore
+    # 检查是否已包含 .aiproject 相关条目（|| true 防止 grep 无匹配时 set -e 退出）
+    has_aiproject=$(grep -c ".aiproject" "$TARGET_DIR/.gitignore" 2>/dev/null || true)
+    if [ "$has_aiproject" = "0" ]; then
+        add_gitignore=""
+        read -p "  是否将 AI 工具配置加入 .gitignore？(y/N): " add_gitignore 2>/dev/null || true
         if [[ "$add_gitignore" =~ ^[Yy]$ ]]; then
             echo "" >> "$TARGET_DIR/.gitignore"
             echo "# AI 工具配置（项目级规范应提交到仓库）" >> "$TARGET_DIR/.gitignore"
