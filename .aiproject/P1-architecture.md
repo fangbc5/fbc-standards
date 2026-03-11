@@ -1,12 +1,10 @@
-# 🟠 P1 — 分层架构与模块规范
+# P1 — 架构设计
 
-> 影响代码组织和长期可维护性。
->
-> 📅 最后更新: 2026-03-11
+> 🟠 影响代码组织和长期可维护性。
 
 ---
 
-## 1. 调用方向
+## 1. 分层架构
 
 ```
 Handler → Service → Repository / CRUD
@@ -22,23 +20,18 @@ Handler → Service → Repository / CRUD
 
 ## 2. 跨模块调用
 
-**Service 间可互相调用，但禁止循环依赖。**
-
-跨模块 Service 通过 `AppState` 注入，不直接 `use` 对方的内部实现：
+Service 间可互相调用，**禁止循环依赖**。通过 `AppState` 注入：
 
 ```rust
-// ✅ 正确：通过 AppState 注入的 Arc<XxxService> 调用
+// ✅ 正确：通过 AppState 注入
 pub async fn create_org(&self, app_state: &AppState, dto: CreateOrgDto) -> Result<()> {
-    // 调用 identity 模块的 Service
     let user = app_state.user_service.get_user_info(dto.creator_id).await?;
     // ...
 }
 
-// ❌ 错误：直接在 Service 中 use 另一个模块的 Repo
-use crate::modules::user::repository::UserRepo;  // 禁止跨模块直接访问 Repo
+// ❌ 错误：跨模块直接访问 Repo
+use crate::modules::user::repository::UserRepo;
 ```
-
-**依赖方向建议**：如 A 调 B、B 调 A → 提取公共逻辑到新 Service 或使用事件驱动解耦。
 
 ---
 
@@ -51,20 +44,13 @@ pub use model::*;
 pub use repository::UserRepo;
 pub use service::UserService;
 pub use handler::*;
-
-// modules/user/model/mod.rs
-mod dto; mod entity;
-pub use entity::{User, TenantUserRel};
-pub use dto::*;
 ```
 
 ---
 
 ## 4. Repository
 
-**只实现 CRUD trait 不存在的方法**（`find_by_username`、`exists_by_email` 等）。
-
-以下方法已由 `sqlxplus::CRUD` trait 提供，**禁止重复实现**：
+**只实现 CRUD trait 不存在的方法。** 以下方法由 `sqlxplus::CRUD` 提供，禁止重复实现：
 
 | 方法 | 说明 |
 |------|------|
@@ -102,46 +88,50 @@ sqlxplus::with_transaction(self.db_pool.mysql_pool(), |tx| async move {
     Ok(())
 }).await
 
-// 分页 → 返回 (Vec<T>, i64)
+// 分页
 let result = User::paginate(pool, builder, page, size).await?;
 Ok((result.items, result.total as i64))
 ```
 
 ---
 
-## 6. Handler
+## 6. 实体定义
 
-只调用 Service，使用 Axum extractors + `R<T>` 响应。
-
-### 基本示例
+使用 `sqlxplus` 派生宏，字段全部 `Option<T>`（插入时跳过 None、更新时部分更新）：
 
 ```rust
-pub async fn get_user(
-    State(app_state): State<Arc<AppState>>,
-    Path(id): Path<i64>,
-) -> Json<R<UserInfo>> {
-    match app_state.user_service.get_user_info(id).await {
-        Ok(user) => Json(R::ok_with_data(user.into())),
-        Err(e) => Json(R::fail_with_message(e.to_string())),
+#[derive(Debug, Default, sqlx::FromRow, serde::Serialize, serde::Deserialize,
+         sqlxplus::ModelMeta, sqlxplus::CRUD)]
+#[model(table = "user", pk = "id", soft_delete = "is_del")]
+pub struct User {
+    pub id: Option<i64>,
+    pub username: Option<String>,
+    pub is_del: Option<i32>,
+}
+```
+
+连接池从 `fbc_app_state` 获取，用 `DbPool::from_mysql_pool()` 转换。禁止手动创建连接。
+
+---
+
+## 7. 配置管理
+
+环境变量 `APP__` 前缀，`__` 分隔层级。每个服务提供 `.env.example`：
+
+```rust
+impl XxxConfig {
+    pub fn new(base: BaseConfig) -> Result<Self> {
+        Ok(Self {
+            base,
+            // 敏感配置必须 expect（防止生产遗漏）
+            jwt_secret: std::env::var("APP__SERVICE__JWT__SECRET")
+                .expect("缺少 APP__SERVICE__JWT__SECRET"),
+            // 非敏感配置可设默认值
+            page_size: std::env::var("APP__SERVICE__PAGE_SIZE")
+                .unwrap_or_else(|_| "20".into()).parse().unwrap_or(20),
+        })
     }
 }
 ```
 
-### 分页 Handler 示例
-
-```rust
-pub async fn list_users(
-    State(app_state): State<Arc<AppState>>,
-    Query(params): Query<UserListParams>,
-) -> Json<R<CursorPageBaseResp<UserInfo>>> {
-    match app_state.user_service.list_users(params).await {
-        Ok((items, total)) => {
-            let resp = CursorPageBaseResp::init(
-                params.cursor, items.is_empty(), items, total
-            );
-            Json(R::ok_with_data(resp))
-        }
-        Err(e) => Json(R::fail_with_message(e.to_string())),
-    }
-}
-```
+禁止硬编码敏感信息，禁止重复使用 config crate 加载。

@@ -5,16 +5,19 @@
 
 ## 规范文件
 
-请在编码前阅读以下文件（P0 最高优先级，P6 最低）：
+请在编码前阅读以下文件（P0 最高优先级，P9 最低）：
 
-- `.aiproject/STANDARDS.md` — 规范总览 + 场景速查 + 检查清单
-- `.aiproject/P0_project_foundation.md` — 依赖管理、项目结构、启动模式（**必须遵守**）
-- `.aiproject/P1_architecture_and_layers.md` — 分层架构、跨模块调用
-- `.aiproject/P2_api_and_error.md` — 响应格式、错误码体系、路由
-- `.aiproject/P3_data_and_config.md` — 实体定义、配置管理、数据库迁移
-- `.aiproject/P4_integration.md` — 缓存、gRPC、Kafka
-- `.aiproject/P5_quality.md` — 命名、日志、测试、安全
-- `.aiproject/P6_engineering.md` — 代码风格、CI/CD、性能
+- `.aiproject/README.md` — 规范总览 + 场景速查 + 检查清单
+- `.aiproject/P0-product.md` — 依赖管理、项目结构、启动模式（**必须遵守**）
+- `.aiproject/P1-architecture.md` — 分层架构、数据层、配置
+- `.aiproject/P2-code-style.md` — 命名、代码风格、文档注释
+- `.aiproject/P3-api.md` — 响应格式、错误码、gRPC、Kafka
+- `.aiproject/P4-security.md` — 安全实践、HTTP 安全
+- `.aiproject/P5-testing.md` — 测试策略、分层测试
+- `.aiproject/P6-deploy.md` — Docker 容器化部署、CI/CD
+- `.aiproject/P7-observability.md` — 日志规范、链路追踪
+- `.aiproject/P8-performance.md` — 性能优化、缓存策略
+- `.aiproject/P9-ops.md` — 健康检查、数据库迁移、运维
 
 ## 关键约束
 
@@ -25,4 +28,5 @@
 - `sqlxplus` 实体宏，字段 `Option<T>`
 - `CacheKeyBuilder` 构建缓存键
 - `tracing` 日志（禁止 `println!`）
+- Docker 多阶段构建部署
 - 中文注释

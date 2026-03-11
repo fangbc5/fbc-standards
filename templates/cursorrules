@@ -5,24 +5,26 @@
 
 ## 必读规范文件
 
-请在开始任何编码工作前，阅读以下文件（按优先级排序）：
+| 优先级 | 文件 | 领域 |
+|--------|------|------|
+| 🔴 P0 | `.aiproject/P0-product.md` | 依赖管理 · 项目结构 · 启动模式 |
+| 🟠 P1 | `.aiproject/P1-architecture.md` | 分层架构 · 数据层 · 配置 |
+| 🔵 P2 | `.aiproject/P2-code-style.md` | 命名 · 代码风格 · 注释 |
+| 🟣 P3 | `.aiproject/P3-api.md` | 响应格式 · 错误码 · gRPC · Kafka |
+| 🟡 P4 | `.aiproject/P4-security.md` | 安全 · 认证 · 输入校验 |
+| 🟤 P5 | `.aiproject/P5-testing.md` | 测试策略 · 分层测试 |
+| 🔵 P6 | `.aiproject/P6-deploy.md` | Docker · CI/CD · 环境管理 |
+| 🟢 P7 | `.aiproject/P7-observability.md` | 日志 · 链路追踪 |
+| 🟠 P8 | `.aiproject/P8-performance.md` | 性能优化 · 缓存策略 |
+| 🔴 P9 | `.aiproject/P9-ops.md` | 健康检查 · 迁移 · 运维 |
 
-1. `.aiproject/STANDARDS.md` — 规范总览和场景速查
-2. `.aiproject/P0_project_foundation.md` — 🔴 **必须遵守**：依赖管理、项目结构、启动模式
-3. `.aiproject/P1_architecture_and_layers.md` — 🟠 分层架构、模块组织、跨模块调用
-4. `.aiproject/P2_api_and_error.md` — 🔵 响应格式、错误处理、错误码、路由
-5. `.aiproject/P3_data_and_config.md` — 🟣 实体定义、数据库、配置管理
-6. `.aiproject/P4_integration.md` — 🟡 缓存、gRPC、Kafka
-7. `.aiproject/P5_quality.md` — 🟤 命名、日志、测试、安全
-8. `.aiproject/P6_engineering.md` — 🟢 代码风格、CI/CD、性能
+## 核心规则
 
-## 核心规则速记
-
-- 使用 `Server::run` 启动，禁止手动初始化
-- 调用方向：Handler → Service → Repository，禁止反向调用
-- 所有 HTTP 响应用 `R<T>` 包装
-- 错误用 `AppError::biz_error()` / `common_error()` / `customer_error()` 工厂方法
-- 实体用 `sqlxplus` 派生宏，字段用 `Option<T>`
-- 缓存键用 `CacheKeyBuilder`，禁止手动拼接
-- 日志用 `tracing`，禁止 `println!`
-- 注释使用中文
+- `Server::run` 启动，禁止手动初始化
+- `Handler → Service → Repository` 单向调用
+- `R<T>` 包装所有 HTTP 响应
+- `AppError` 工厂方法处理错误
+- `sqlxplus` 实体宏，字段 `Option<T>`
+- `CacheKeyBuilder` 构建缓存键
+- `tracing` 日志，禁止 `println!`
+- 中文注释
