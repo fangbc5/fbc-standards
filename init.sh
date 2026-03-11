@@ -62,7 +62,7 @@ if [ "$SKIP_AIPROJECT" != "true" ]; then
     echo ""
     echo -e "${BLUE}📋 复制 .aiproject 规范文件...${NC}"
     cp -r "$SCRIPT_DIR/.aiproject" "$TARGET_DIR/"
-    echo -e "${GREEN}  ✅ .aiproject/ (P0-P6 + STANDARDS.md)${NC}"
+    echo -e "${GREEN}  ✅ .aiproject/ (README.md + P0-P9)${NC}"
 fi
 
 # ---------- 选择 AI 工具 ----------
