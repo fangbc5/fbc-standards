@@ -137,12 +137,12 @@ install_cline() {
 installed=0
 for choice in "${choices[@]}"; do
     case "$choice" in
-        1) install_cursor; ((installed++)) ;;
-        2) install_copilot; ((installed++)) ;;
-        3) install_gemini; ((installed++)) ;;
-        4) install_claude; ((installed++)) ;;
-        5) install_windsurf; ((installed++)) ;;
-        6) install_cline; ((installed++)) ;;
+        1) install_cursor; installed=$((installed + 1)) ;;
+        2) install_copilot; installed=$((installed + 1)) ;;
+        3) install_gemini; installed=$((installed + 1)) ;;
+        4) install_claude; installed=$((installed + 1)) ;;
+        5) install_windsurf; installed=$((installed + 1)) ;;
+        6) install_cline; installed=$((installed + 1)) ;;
         *) echo -e "${YELLOW}  ⚠️  未知选项: $choice，已跳过${NC}" ;;
     esac
 done
