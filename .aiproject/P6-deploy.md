@@ -4,111 +4,124 @@
 
 ---
 
-## 1. Docker 多阶段构建
+## 1. Docker 镜像构建标准
 
-每个微服务根目录提供 `Dockerfile`：
+### 构建基础镜像
+
+所有微服务统一使用 `fbc-builder:latest`（Alpine musl 工具链），产出全静态链接二进制。
+
+```bash
+# 首次在 workspace 根目录构建基础镜像
+docker build -f docker/Dockerfile.builder -t fbc-builder:latest .
+```
+
+### 标准 Dockerfile 模板
+
+每个微服务根目录提供 `Dockerfile`，使用三阶段构建 + `scratch` 零字节运行镜像：
 
 ```dockerfile
-# ===== 构建阶段 =====
-FROM rust:1.83-slim AS builder
+# {service} Docker 镜像（fbc-builder + scratch）
+# 构建: docker build -f {service}/Dockerfile .（workspace 根目录）
+# syntax=docker/dockerfile:1
 
-# 安装构建依赖
-RUN apt-get update && apt-get install -y \
-    pkg-config libssl-dev cmake build-essential \
-    && rm -rf /var/lib/apt/lists/*
-
-WORKDIR /app
-
-# 先复制依赖文件，利用 Docker 缓存
-COPY Cargo.toml Cargo.lock ./
-COPY fbc-starter/Cargo.toml fbc-starter/Cargo.toml
-COPY ms-xxx/Cargo.toml ms-xxx/Cargo.toml
-
-# 创建空的 src 目录用于预编译依赖
-RUN mkdir -p fbc-starter/src ms-xxx/src \
-    && echo "fn main() {}" > ms-xxx/src/main.rs \
-    && touch fbc-starter/src/lib.rs \
-    && cargo build --release -p ms-xxx 2>/dev/null || true
-
-# 复制实际源码并构建
+FROM fbc-builder:latest AS planner
 COPY . .
-RUN touch ms-xxx/src/main.rs && cargo build --release -p ms-xxx
+RUN cargo chef prepare --recipe-path recipe.json
 
-# ===== 运行阶段 =====
-FROM debian:bookworm-slim
+FROM fbc-builder:latest AS builder
+COPY --from=planner /app/recipe.json recipe.json
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    --mount=type=cache,target=/app/target \
+    cargo chef cook --release --recipe-path recipe.json -p {service}
+COPY . .
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    --mount=type=cache,target=/app/target \
+    cargo build --release -p {service} && \
+    cp target/release/{service} /app/{service}-bin && \
+    strip /app/{service}-bin
 
-RUN apt-get update && apt-get install -y \
-    ca-certificates libssl3 \
-    && rm -rf /var/lib/apt/lists/*
-
-# 创建非 root 用户
-RUN groupadd -r app && useradd -r -g app app
-
-COPY --from=builder /app/target/release/ms-xxx /usr/local/bin/
-COPY ms-xxx/.env.example /app/.env
-
+FROM scratch
+COPY --from=builder /app/{service}-bin /app/{service}
 WORKDIR /app
-USER app
-
-EXPOSE 3000
-
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s \
-    CMD curl -f http://localhost:3000/health || exit 1
-
-CMD ["ms-xxx"]
+EXPOSE {port}
+ENTRYPOINT ["/app/{service}"]
 ```
+
+### 关键规则
+
+| 规则 | 说明 |
+|------|------|
+| 构建镜像 | `fbc-builder:latest`（Alpine musl），**禁止** `rust:*-slim` |
+| 运行镜像 | `scratch`，**禁止** `debian-slim` / `distroless` |
+| CA 证书 | **不复制**（内网服务无 TLS 需求） |
+| SSL 环境变量 | **不设置** `SSL_CERT_FILE` |
+| `APP__SERVER__ADDR` | **不在 Dockerfile 中设置**，由 `docker-compose.yml` 指定 |
+| BuildKit cache | **必须启用** `--mount=type=cache` 加速增量编译 |
+| `strip` | 构建后 **必须** strip 二进制 |
+| Healthcheck | **不在 Dockerfile 中配置**（scratch 无可用工具） |
+| `EXPOSE` | 保留，作为文档声明 |
 
 ---
 
-## 2. Docker Compose（开发环境）
+## 2. Docker Compose 标准
+
+### 标准模板
 
 ```yaml
-# docker-compose.yml
-version: '3.8'
 services:
-  ms-xxx:
+  {service}:
     build:
-      context: .
-      dockerfile: ms-xxx/Dockerfile
+      context: ..
+      dockerfile: {service}/Dockerfile
+    image: {service}:latest
+    container_name: {service}
     ports:
-      - "3000:3000"
-    env_file:
-      - ms-xxx/.env
-    depends_on:
-      - mysql
-      - redis
-    networks:
-      - hula-network
-
-  mysql:
-    image: mysql:8.0
+      - "{port}:{port}"
     environment:
-      MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: hula
-    ports:
-      - "3306:3306"
-    volumes:
-      - mysql-data:/var/lib/mysql
+      # ===== 服务器配置 =====
+      APP__SERVER__ADDR: "0.0.0.0"
+      APP__SERVER__PORT: "{port}"
+      # ===== 日志配置 =====
+      APP__LOG__LEVEL: "info"
+      # ===== Nacos =====
+      APP__NACOS__SERVER_ADDRS: "host.docker.internal:8848"
+      APP__NACOS__SERVICE_NAME: "{service}"
+      APP__NACOS__NAMESPACE: "{namespace-id}"
+      # ... 其他业务配置
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
     networks:
-      - hula-network
-
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    networks:
-      - hula-network
-
-volumes:
-  mysql-data:
+      - fbc-network
 
 networks:
-  hula-network:
+  fbc-network:
+    external: true
 ```
+
+### 关键规则
+
+| 规则 | 说明 |
+|------|------|
+| `APP__SERVER__ADDR` | **必须设置** `"0.0.0.0"`，否则服务仅监听 `127.0.0.1`，Nacos 注册失败 |
+| Healthcheck | **不配置**（Nacos 通过 gRPC 心跳管理健康状态，与 Docker healthcheck 独立） |
+| `extra_hosts` | Linux 部署时需要，macOS Docker Desktop 自动解析 |
+| 网络 | 使用外部 `fbc-network`，所有服务共享同一网络 |
 
 ---
 
-## 3. CI/CD Pipeline
+## 3. 服务注册要点
+
+- 微服务经过网关（`ms-gateway`），**不对外暴露**
+- Nacos 服务注册/发现使用 gRPC 协议（`set_use_grpc(true)`）
+- Nacos 健康检查基于 gRPC 心跳，**不依赖** Docker healthcheck 或 HTTP 探针
+- `APP__SERVER__ADDR` 必须为 `0.0.0.0`，否则容器内服务仅监听 loopback，Nacos 无法通信
+
+---
+
+## 4. CI/CD Pipeline
 
 ```bash
 # 代码检查
@@ -118,25 +131,22 @@ cargo clippy -- -D warnings
 # 测试
 cargo test --lib --tests
 
-# 安全审计
-cargo audit
-
-# 构建镜像
-docker build -t ms-xxx:${VERSION} -f ms-xxx/Dockerfile .
+# 构建镜像（workspace 根目录执行）
+docker build -f {service}/Dockerfile -t {service}:${VERSION} .
 
 # 推送镜像
-docker push registry.example.com/ms-xxx:${VERSION}
+docker push registry.example.com/{service}:${VERSION}
 ```
 
 ---
 
-## 4. 环境管理
+## 5. 环境管理
 
 | 环境 | 配置方式 | 说明 |
 |------|----------|------|
-| 开发 | `.env` 文件 | 本地开发，docker-compose |
-| 测试 | `.env.test` | CI/CD 自动测试 |
-| 生产 | 环境变量 / 配置中心 | Nacos / K8s ConfigMap |
+| 开发 | `.env` 文件 | 本地开发，`cargo run` |
+| 容器 | `docker-compose.yml` `environment` | Docker 部署，覆盖默认值 |
+| 生产 | 环境变量 / Nacos 配置中心 | K8s ConfigMap / Nacos |
 
 - `.env.example` **必须提交**到 Git（模板，不含真实值）
 - `.env` **禁止提交**到 Git（包含真实密钥）

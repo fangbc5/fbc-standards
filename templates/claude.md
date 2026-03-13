@@ -28,5 +28,5 @@
 - `sqlxplus` 实体宏，字段 `Option<T>`
 - `CacheKeyBuilder` 构建缓存键
 - `tracing` 日志（禁止 `println!`）
-- Docker 多阶段构建部署
+- `fbc-builder` + `scratch` 部署（禁止 `debian-slim` / `distroless`）
 - 中文注释

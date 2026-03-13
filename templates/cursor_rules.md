@@ -27,5 +27,5 @@
 4. `sqlxplus` 实体宏，字段 `Option<T>`
 5. `CacheKeyBuilder` 构建缓存键，禁止手动拼接
 6. `tracing` 日志，禁止 `println!`
-7. Docker 多阶段构建部署
+7. `fbc-builder` + `scratch` 部署（禁止 `debian-slim` / `distroless`）
 8. 中文注释
