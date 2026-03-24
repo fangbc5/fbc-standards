@@ -21,10 +21,11 @@ bash /tmp/fbc-standards/init.sh /path/to/your/ms-xxx
 |---|------|-----------|
 | 1 | Cursor | `.cursorrules` + `.cursor/rules/fbc-starter.md` |
 | 2 | GitHub Copilot | `.github/copilot-instructions.md` |
-| 3 | Gemini / Antigravity | `.gemini/settings.json` + `.gemini/styleguide.md` |
+| 3 | Gemini | `.gemini/settings.json` + `.gemini/styleguide.md` |
 | 4 | Claude Code | `CLAUDE.md` |
 | 5 | Windsurf | `.windsurfrules` |
 | 6 | Cline | `.clinerules` |
+| 7 | Antigravity | `.agents/rules/` |
 
 ## 规范结构 (P0–P9)
 
